@@ -1,0 +1,31 @@
+import sys
+sys.path.insert(0, '.')
+from services.cftc_service import get_latest_cftc_report
+from services.cboe_service import get_put_call_analysis
+
+print("=" * 50)
+print("CFTC 报告测试")
+print("=" * 50)
+result = get_latest_cftc_report()
+print('报告日期:', result.get('report_date'))
+print('TFF品种数:', len(result.get('tff_items', [])))
+print('Disagg品种数:', len(result.get('disagg_items', [])))
+print('数据源:', result.get('source'))
+analysis = result.get('analysis', {})
+print('发现数:', len(analysis.get('findings', [])))
+print('总结:', analysis.get('summary'))
+print()
+
+print("=" * 50)
+print("CBOE 分析测试")
+print("=" * 50)
+result = get_put_call_analysis()
+print('当前比率:', result.get('current_ratio'))
+print('情绪:', result.get('sentiment'))
+print('趋势:', result.get('trend'))
+print('风险等级:', result.get('risk_level'))
+print('报告段落数:', len(result.get('report', {}).get('sections', [])))
+print('极端信号:', len(result.get('extremes', [])))
+print('数据源:', result.get('source'))
+print()
+print("OK - 所有服务正常")
