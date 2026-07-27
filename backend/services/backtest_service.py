@@ -61,9 +61,10 @@ def _fetch_market_data(symbol: str, market: str, start_date: str, end_date: str)
             return df
 
     except Exception as e:
-        logger.warning(f"获取市场数据失败: {e}")
+        logger.error(f"获取市场数据失败: {e}")
+        raise
 
-    return _generate_mock_data(start_date, end_date)
+    raise RuntimeError(f"无法获取 {symbol} 的市场数据：所有数据源均失败")
 
 
 def _generate_mock_data(start_date: str, end_date: str) -> pd.DataFrame:

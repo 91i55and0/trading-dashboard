@@ -131,7 +131,7 @@ class DefaultAKShareProvider(BaseDataProvider):
             self._ak = ak
             logger.info(f"AKShare 初始化成功，网关: {self._gateway}")
         except ImportError:
-            logger.warning("AKShare 未安装，使用模拟数据模式")
+            logger.error("AKShare 未安装，无法获取真实数据")
             self._ak = None
         except Exception as e:
             logger.error(f"AKShare 初始化失败: {e}")
@@ -202,7 +202,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     def get_spot_quote(self, market: str = "A") -> pd.DataFrame:
         """获取实时行情快照（东方财富 → 腾讯 → 新浪）"""
         if self._ak is None:
-            return self._mock_spot_quote()
+            raise RuntimeError("无法获取A股实时行情：AKShare 未安装，请安装 akshare")
 
         # 30秒缓存，避免短时间内重复拉取全市场行情（如 quote + kline 连续调用）
         now = time.time()
@@ -234,8 +234,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                 logger.warning(f"行情快照 {source_name} ({api_name}) 失败: {e}")
                 continue
 
-        logger.warning("所有行情快照数据源均失败，使用模拟数据")
-        return self._mock_spot_quote()
+        raise RuntimeError("无法获取A股实时行情：所有数据源（东方财富、腾讯、新浪）均失败")
 
     def _fetch_spot_from_sina(self) -> Optional[pd.DataFrame]:
         """从新浪获取行情快照"""
@@ -401,7 +400,7 @@ class DefaultAKShareProvider(BaseDataProvider):
             logger.warning(f"新浪美股API失败: {e}")
             return self._get_us_spot_quote_via_akshare(cache_time)
 
-        return self._mock_spot_quote()
+        raise RuntimeError("无法获取美股实时行情：所有数据源（新浪、AKShare）均失败")
 
     def _get_us_spot_quote_via_akshare(self, cache_time: float) -> Optional[pd.DataFrame]:
         """通过AKShare代理获取美股行情（回退方案）"""
@@ -440,7 +439,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         except Exception as e:
             logger.warning(f"美股行情AKShare回退失败: {e}")
 
-        return self._mock_spot_quote()
+        raise RuntimeError("无法获取美股实时行情：所有数据源（新浪、AKShare）均失败")
 
     def _fetch_single_us_stock_from_sina(self, symbol: str) -> Optional[Dict[str, Any]]:
         """从新浪API单独获取单只美股行情"""
@@ -568,7 +567,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         """获取单只股票实时行情"""
         df = self.get_spot_quote(market)
         if df is None or df.empty:
-            return self._mock_quote(symbol)
+            raise RuntimeError(f"无法获取 {symbol} 的实时行情：行情数据为空")
 
         try:
             # 适配不同数据源的列名和代码格式
@@ -589,7 +588,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                     single = self._fetch_single_us_stock_from_sina(symbol)
                     if single:
                         return single
-                    return self._mock_quote(symbol)
+                    raise RuntimeError(f"无法获取 {symbol} 的实时行情：在美股行情数据中未找到该股票")
 
                 r = row.iloc[0]
                 name_col = next((col for col in df.columns if str(col).lower() in ("名称", "name")), code_col)
@@ -625,7 +624,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                 single = self._fetch_single_a_stock_from_sina(symbol)
                 if single:
                     return single
-                return self._mock_quote(symbol)
+                raise RuntimeError(f"无法获取 {symbol} 的实时行情：在A股行情数据中未找到该股票")
 
             r = row.iloc[0]
             # 腾讯数据源列名映射: zxj→最新价, zd→涨跌额, zdf→涨跌幅
@@ -644,7 +643,7 @@ class DefaultAKShareProvider(BaseDataProvider):
             }
         except Exception as e:
             logger.warning(f"解析行情失败: {e}")
-            return self._mock_quote(symbol)
+            raise RuntimeError(f"无法获取 {symbol} 的实时行情：解析行情数据失败")
 
     # ==================== K线数据 ====================
 
@@ -660,7 +659,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     ) -> pd.DataFrame:
         """获取K线数据（支持多数据源降级：东方财富 → 腾讯 → 新浪）"""
         if self._ak is None:
-            return self._mock_kline(count)
+            raise RuntimeError(f"无法获取 {symbol} 的K线数据：AKShare 未安装，请安装 akshare")
 
         if market.upper() == "A":
             s_date = start_date.replace("-", "") if start_date else "20240101"
@@ -718,8 +717,8 @@ class DefaultAKShareProvider(BaseDataProvider):
                 last_error = e
                 logger.warning(f"美股K线失败: {e}")
 
-        logger.warning(f"所有K线数据源均失败，使用模拟数据: {last_error}")
-        return self._mock_kline(count)
+        logger.warning(f"所有K线数据源均失败: {last_error}")
+        raise RuntimeError(f"无法获取 {symbol} 的K线数据：所有数据源（东方财富、腾讯、新浪）均失败")
 
     def _to_tx_symbol(self, symbol: str) -> str:
         """转换为腾讯数据源格式 (sz000001 / sh600519)"""
@@ -759,7 +758,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     def get_stock_info(self, symbol: str, market: str = "A") -> Dict[str, Any]:
         """获取个股基本面信息"""
         if self._ak is None:
-            return self._mock_fundamental()
+            raise RuntimeError(f"无法获取 {symbol} 的基本面数据：AKShare 未安装，请安装 akshare")
 
         try:
             self._track_cost("stock_individual_info_em")
@@ -778,7 +777,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         except Exception as e:
             logger.warning(f"获取基本面数据失败: {e}")
 
-        return self._mock_fundamental()
+        raise RuntimeError(f"无法获取 {symbol} 的基本面数据：所有数据源均失败")
 
     # ==================== 深度财务数据 ====================
 
@@ -797,18 +796,18 @@ class DefaultAKShareProvider(BaseDataProvider):
         }
         """
         if self._ak is None:
-            return self._mock_financial_data(symbol, market)
+            raise RuntimeError(f"无法获取 {symbol} 的深度财务数据：AKShare 未安装，请安装 akshare")
 
         if market.upper() == "A":
             return self._get_a_share_financial_data(symbol)
         elif market.upper() == "US":
             return self._get_us_financial_data(symbol)
         else:
-            return self._mock_financial_data(symbol, market)
+            raise RuntimeError(f"无法获取 {symbol} 的深度财务数据：不支持的市场 {market}")
 
     def _get_a_share_financial_data(self, symbol: str) -> Dict[str, Any]:
         """获取A股深度财务数据（push2报价 + F10财务 + 腾讯行情 + AKShare兜底）"""
-        result = {"basic": {}, "growth": {}, "profitability": {}, "cashflow": {}, "peers": [], "source": "mock"}
+        result = {"basic": {}, "growth": {}, "profitability": {}, "cashflow": {}, "peers": [], "source": "unknown"}
         has_real = False
         
         # ====== 策略1：东方财富 push2 + F10 API（无需代理，直连） ======
@@ -879,7 +878,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         
         # 标记是否使用了真实数据
         if not has_real and not bool(result["growth"].get("revenue_growth_yoy", [])) and not bool(result["peers"]):
-            result["_mock"] = True
+            result["_incomplete"] = True
         
         return result
 
@@ -2269,7 +2268,7 @@ class DefaultAKShareProvider(BaseDataProvider):
 
     def _get_us_financial_data(self, symbol: str) -> Dict[str, Any]:
         """获取美股深度财务数据"""
-        result = {"basic": {}, "growth": {}, "profitability": {}, "cashflow": {}, "peers": [], "source": "mock"}
+        result = {"basic": {}, "growth": {}, "profitability": {}, "cashflow": {}, "peers": [], "source": "unknown"}
         
         try:
             # 使用AKShare美股基本面
@@ -2897,7 +2896,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     def search_stocks(self, keyword: str, market: str = "A") -> List[Dict[str, Any]]:
         """搜索股票"""
         if self._ak is None:
-            return self._mock_search(keyword, market)
+            raise RuntimeError(f"无法搜索股票 '{keyword}'：AKShare 未安装，请安装 akshare")
 
         try:
             import time as time_mod
@@ -2963,7 +2962,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                         })
                     return stocks
 
-                return self._mock_search(keyword, market)
+                raise RuntimeError(f"无法搜索股票 '{keyword}'：美股列表获取失败，所有数据源均不可用")
 
             # A股搜索（默认）
             # 1小时缓存，避免每次搜索都拉取全量A股列表
@@ -2976,7 +2975,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                     self._a_stock_name_cache = df
                     self._a_stock_name_cache_time = time_mod.time()
             if df is None or df.empty:
-                return self._mock_search(keyword, market)
+                raise RuntimeError(f"无法搜索股票 '{keyword}'：A股列表获取失败")
 
             results = df[
                 df["name"].str.contains(keyword, na=False) |
@@ -2992,7 +2991,7 @@ class DefaultAKShareProvider(BaseDataProvider):
             return stocks
         except Exception as e:
             logger.warning(f"搜索股票失败: {e}")
-            return self._mock_search(keyword, market)
+            raise RuntimeError(f"无法搜索股票 '{keyword}'：搜索异常 - {e}")
 
     # ==================== 行业板块 ====================
 
@@ -3023,7 +3022,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     def get_fund_flow(self, symbol: str, market: str = "A") -> Dict[str, Any]:
         """获取个股资金流向"""
         if self._ak is None:
-            return self._mock_fund_flow()
+            raise RuntimeError(f"无法获取 {symbol} 的资金流向：AKShare 未安装，请安装 akshare")
 
         try:
             self._track_cost("stock_individual_fund_flow")
@@ -3041,7 +3040,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         except Exception as e:
             logger.warning(f"获取资金流向失败: {e}")
 
-        return self._mock_fund_flow()
+        raise RuntimeError(f"无法获取 {symbol} 的资金流向：所有数据源均失败")
 
     def get_sector_fund_flow_rank(self, market: str = "A") -> pd.DataFrame:
         """获取板块资金流向排名"""
@@ -3089,7 +3088,7 @@ class DefaultAKShareProvider(BaseDataProvider):
     def get_cftc_report(self) -> Dict[str, Any]:
         """获取CFTC持仓报告"""
         if self._ak is None:
-            return self._mock_cftc()
+            raise RuntimeError("无法获取CFTC持仓报告：AKShare 未安装，请安装 akshare")
 
         try:
             df = self._ak.futures_cftc_merchant_holding_analysis()
@@ -3112,12 +3111,12 @@ class DefaultAKShareProvider(BaseDataProvider):
         except Exception as e:
             logger.warning(f"获取CFTC数据失败: {e}")
 
-        return self._mock_cftc()
+        raise RuntimeError("无法获取CFTC持仓报告：所有数据源均失败")
 
     def get_cboe_put_call(self, days: int = 30) -> Dict[str, Any]:
         """获取CBOE Put/Call比率"""
         if self._ak is None:
-            return self._mock_put_call(days)
+            raise RuntimeError("无法获取CBOE Put/Call比率：AKShare 未安装，请安装 akshare")
 
         try:
             df = self._ak.index_option_cboe_put_call_ratio()
@@ -3134,7 +3133,7 @@ class DefaultAKShareProvider(BaseDataProvider):
         except Exception as e:
             logger.warning(f"获取CBOE数据失败: {e}")
 
-        return self._mock_put_call(days)
+        raise RuntimeError("无法获取CBOE Put/Call比率：所有数据源均失败")
 
     # ==================== 健康检查 ====================
 
@@ -3159,7 +3158,7 @@ class DefaultAKShareProvider(BaseDataProvider):
                 status["akshare_version"] = "unknown"
         else:
             status["status"] = "degraded"
-            status["note"] = "AKShare 未安装，使用模拟数据"
+            status["note"] = "AKShare 未安装，无法获取真实数据"
 
         return status
 

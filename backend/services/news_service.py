@@ -16,29 +16,10 @@ def get_daily_market_events(date: str = None) -> Dict[str, Any]:
     """
     today = date or datetime.now().strftime("%Y-%m-%d")
 
-    # 尝试从数据源获取实际数据，当前返回模拟结构
-    # 后续可接入财经日历 API (如 investing.com, forexfactory, akshare)
-    events = _generate_market_events(today)
-
-    # 分类汇总
-    economic_data = [e for e in events if e["category"] == "economic_data"]
-    central_bank = [e for e in events if e["category"] == "central_bank"]
-    speeches = [e for e in events if e["category"] == "speech"]
-    meetings = [e for e in events if e["category"] == "meeting"]
-
-    return {
-        "date": today,
-        "summary": f"今日共 {len(events)} 项重要事件，其中经济数据 {len(economic_data)} 项，央行动态 {len(central_bank)} 项",
-        "events": events,
-        "by_category": {
-            "economic_data": economic_data,
-            "central_bank": central_bank,
-            "speeches": speeches,
-            "meetings": meetings,
-        },
-        "high_impact": [e for e in events if e["impact"] == "high"],
-        "generated_at": datetime.now().isoformat(),
-    }
+    raise RuntimeError(
+        "无法获取每日市场事件：财经日历数据源尚未接入。"
+        "后续可接入 investing.com、forexfactory 或 akshare 财经日历 API。"
+    )
 
 
 def get_silicon_valley_insights(days: int = 1) -> Dict[str, Any]:
@@ -46,15 +27,10 @@ def get_silicon_valley_insights(days: int = 1) -> Dict[str, Any]:
     获取硅谷顶级观点推送
     追踪知名投资人和科技领袖的公开观点
     """
-    insights = _generate_insights(days)
-
-    return {
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "total_insights": len(insights),
-        "insights": insights,
-        "by_topic": _group_by_topic(insights),
-        "generated_at": datetime.now().isoformat(),
-    }
+    raise RuntimeError(
+        "无法获取硅谷顶级观点：数据源尚未接入。"
+        "后续可接入 Twitter/X API、Bloomberg 或 RSS 订阅源。"
+    )
 
 
 def get_13f_monitor(lookback_days: int = 30) -> Dict[str, Any]:
@@ -62,34 +38,10 @@ def get_13f_monitor(lookback_days: int = 30) -> Dict[str, Any]:
     SEC EDGAR 13F 持仓监控报告
     监控知名机构的最新13F持仓变动
     """
-    filings = _generate_13f_filings(lookback_days)
-
-    # 按机构汇总
-    institutions = {}
-    for f in filings:
-        inst = f["institution"]
-        if inst not in institutions:
-            institutions[inst] = {
-                "name": inst,
-                "filings": [],
-                "total_new_positions": 0,
-                "total_closed_positions": 0,
-                "total_value_change": 0,
-            }
-        inst_data = institutions[inst]
-        inst_data["filings"].append(f)
-        inst_data["total_new_positions"] += len(f.get("new_positions", []))
-        inst_data["total_closed_positions"] += len(f.get("closed_positions", []))
-        inst_data["total_value_change"] += f.get("portfolio_value_change", 0)
-
-    return {
-        "report_date": datetime.now().strftime("%Y-%m-%d"),
-        "lookback_days": lookback_days,
-        "total_filings": len(filings),
-        "institutions": list(institutions.values()),
-        "filings": filings,
-        "generated_at": datetime.now().isoformat(),
-    }
+    raise RuntimeError(
+        "无法获取13F持仓报告：SEC EDGAR 数据源尚未接入。"
+        "后续可接入 SEC EDGAR API 或 whalewisdom.com 数据。"
+    )
 
 
 def get_news_digest() -> Dict[str, Any]:
@@ -113,7 +65,7 @@ def get_news_digest() -> Dict[str, Any]:
 
 
 # ============================
-# 数据生成 (模拟数据，后续替换为真实数据源)
+# 数据生成函数（真实数据源接入前不可用，仅供未来参考）
 # ============================
 
 def _generate_market_events(date_str: str) -> List[Dict[str, Any]]:

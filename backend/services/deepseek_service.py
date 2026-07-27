@@ -409,7 +409,7 @@ def _build_data_summary(
 
 ## 数据来源
 - 数据来源标识：{fin.get('source', 'unknown')}
-- 是否为模拟数据：{fin.get('is_mock', True)}
+- 是否为模拟数据：{fin.get('_incomplete', True)}
 
 请严格按照系统提示词中的六个模块要求，生成完整的深度研究报告。所有分析必须基于以上真实数据，不要编造任何数据。如果某项数据缺失，请明确标注"数据不足"。
 """

@@ -24,9 +24,8 @@ def search_stock(keyword: str, market: str = "A") -> Dict[str, Any]:
         stocks = provider.search_stocks(keyword, market=market)
         return {"results": stocks}
     except Exception as e:
-        logger.warning(f"搜索股票失败: {e}")
-
-    return {"results": _mock_search_results(keyword, market)}
+        logger.error(f"搜索股票失败: {e}")
+        raise
 
 
 def _mock_search_results(keyword: str, market: str = "A") -> list:
@@ -53,21 +52,10 @@ def get_quote(symbol: str, market: str = "A") -> Dict[str, Any]:
         if quote and quote.get("price", 0) > 0:
             return quote
     except Exception as e:
-        logger.warning(f"获取行情失败: {e}")
+        logger.error(f"获取行情失败: {e}")
+        raise
 
-    return {
-        "symbol": symbol,
-        "name": symbol,
-        "price": 100.0,
-        "change": 1.5,
-        "change_pct": 1.52,
-        "volume": 10000000,
-        "amount": 1000000000,
-        "high": 101.0,
-        "low": 99.0,
-        "open": 99.5,
-        "pre_close": 98.5,
-    }
+    raise RuntimeError(f"无法获取 {symbol} 的实时行情：返回数据无效")
 
 
 def get_kline_data(symbol: str, market: str = "A", period: str = "daily", count: int = 250) -> Dict[str, Any]:
@@ -91,9 +79,8 @@ def get_kline_data(symbol: str, market: str = "A", period: str = "daily", count:
                 })
             return {"symbol": symbol, "data": klines}
     except Exception as e:
-        logger.warning(f"获取K线数据失败: {e}")
-
-    return _generate_mock_klines(count)
+        logger.error(f"获取K线数据失败: {e}")
+        raise
 
 
 def _generate_mock_klines(count: int = 250) -> Dict[str, Any]:
@@ -369,7 +356,7 @@ def _fetch_real_data(symbol: str, market: str) -> Dict[str, Any]:
         return provider.get_financial_data(symbol, market)
     except Exception as e:
         logger.warning(f"获取财务数据失败: {e}")
-        return {"basic": {}, "growth": {}, "profitability": {}, "peers": [], "source": "mock", "_mock": True}
+        return {"basic": {}, "growth": {}, "profitability": {}, "peers": [], "source": "unknown", "_incomplete": True}
 
 
 def _build_financial_metrics(symbol: str, market: str, real_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -379,7 +366,7 @@ def _build_financial_metrics(symbol: str, market: str, real_data: Dict[str, Any]
     profitability = real_data.get("profitability", {})
     cashflow = real_data.get("cashflow", {})
     peers_raw = real_data.get("peers", [])
-    is_mock = real_data.get("_mock", False)
+    is_mock = real_data.get("_incomplete", False)
 
     pe = basic.get("pe", 0)
     pb = basic.get("pb", 0)
@@ -521,7 +508,7 @@ def _build_financial_metrics(symbol: str, market: str, real_data: Dict[str, Any]
         "avg_peer_growth": round(avg_peer_growth, 1),
         "industry": industry,
         "is_mock": is_mock,
-        "source": real_data.get("source", "mock"),
+        "source": real_data.get("source", "unknown"),
         "forecast": real_data.get("forecast", {}),
         "trend_dates": real_data.get("growth", {}).get("trend_dates", []),
         # 新增数据维度
@@ -1148,7 +1135,7 @@ def _red_blue_debate(fin: dict, quote: dict) -> Dict[str, Any]:
 
     # 11. 数据质量警告
     if is_mock:
-        bear_theses.append("当前财务数据为模型估算值而非真实财报数据，以上分析结论的可靠性受限，实际投资决策前务必核实官方数据")
+        bear_theses.append("当前财务数据不完整，部分指标未能获取到真实数据，以上分析结论的可靠性受限，实际投资决策前务必核实官方数据")
         bear_score += 1
 
     # === 新增：分析师、机构、北向、分红因素 ===
@@ -1223,7 +1210,7 @@ def _red_blue_debate(fin: dict, quote: dict) -> Dict[str, Any]:
         "bull_score": bull_score,
         "bear_score": bear_score,
         "net_score": net_score,
-        "data_source": fin.get("source", "mock"),
+        "data_source": fin.get("source", "unknown"),
         "is_mock": is_mock,
     }
 
@@ -2042,7 +2029,7 @@ def generate_research_report(
     
     # ====== AI报告生成失败，回退到模板式生成 ======
     logger.info(f"回退到模板式报告: {symbol}")
-    data_note = "> ⚠️ **注意**：当前财务数据为模型估算值，非真实数据。实际投资决策请以官方财报为准。\n" if is_mock else ""
+    data_note = "> ⚠️ **注意**：当前财务数据不完整，部分指标未能获取。实际投资决策请以官方财报为准。\n" if is_mock else ""
 
     # 行业分析（基于真实数据）
     sector_desc = _gen_sector_overview(fin)
@@ -2177,16 +2164,16 @@ def generate_research_report(
         "sina": "新浪行情数据",
         "akshare_spot": "AKShare行情数据",
         "akshare_info": "AKShare个股数据",
-        "mock": "模型估算"
+        "unknown": "数据不完整"
     }
     data_label = f"数据来源：{data_source_map.get(fin['source'], fin['source'])}"
     if is_mock:
-        data_label = "数据来源：模型估算（部分数据不可用）"
+        data_label = "数据来源：部分数据不可用"
     
     # 数据质量说明
     data_quality_note = ""
     if is_mock:
-        data_quality_note = "> ⚠️ **注意**：当前财务数据为模型估算值，非真实数据。实际投资决策请以官方财报为准。\n"
+        data_quality_note = "> ⚠️ **注意**：当前财务数据不完整，部分指标未能获取。实际投资决策请以官方财报为准。\n"
     elif fin["source"] != "eastmoney":
         data_quality_note = f"> ℹ️ 数据来源：{data_source_map.get(fin['source'], fin['source'])}。部分指标可能与官方财报有轻微偏差。\n"
 

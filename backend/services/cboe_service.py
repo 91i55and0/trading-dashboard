@@ -217,11 +217,11 @@ def _fetch_cboe_web_data() -> Optional[Dict[str, Any]]:
 def get_put_call_data(days: int = 30) -> Dict[str, Any]:
     """
     获取CBOE Put/Call比率数据
-    优先从 ww2.cboe.com 获取真实数据，回退到模拟数据
+    从 ww2.cboe.com 获取真实数据，失败则抛出异常
     """
     data = []
     intraday = []
-    source = "模拟数据"
+    source = "未知"
     report_date = datetime.now().strftime('%Y-%m-%d')
 
     try:
@@ -272,9 +272,12 @@ def get_put_call_data(days: int = 30) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"处理 CBOE ww2 数据失败: {e}")
 
-    # 回退到模拟数据
+    # 如果真实数据获取失败，抛出错误
     if not data:
-        data = _generate_mock_put_call_data(days)
+        raise RuntimeError(
+            "无法获取CBOE Put/Call比率数据：CBOE ww2 页面无法访问或数据解析失败。"
+            "请检查网络连接，或稍后重试。"
+        )
 
     return {
         "data": data,
