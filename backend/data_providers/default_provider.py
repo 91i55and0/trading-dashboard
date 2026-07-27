@@ -213,11 +213,11 @@ class DefaultAKShareProvider(BaseDataProvider):
         if market.upper() == "US":
             return self._get_us_spot_quote(now)
 
-        # 尝试多个数据源: 新浪（无代理）→ 东方财富 → 腾讯
+        # 尝试多个数据源: 东方财富 → 腾讯 → 新浪（硬编码20只，最后兜底）
         sources = [
-            ("stock_zh_a_spot_sina", "新浪", lambda: self._fetch_spot_from_sina()),
             ("stock_zh_a_spot_em", "东方财富", lambda: self._ak_call_with_timeout(self._ak.stock_zh_a_spot_em, 10)),
             ("stock_zh_a_spot_tx", "腾讯", lambda: self._ak_call_with_timeout(self._ak.stock_zh_a_spot_tx, 10)),
+            ("stock_zh_a_spot_sina", "新浪", lambda: self._fetch_spot_from_sina()),
         ]
 
         for api_name, source_name, fetch_func in sources:
@@ -499,6 +499,71 @@ class DefaultAKShareProvider(BaseDataProvider):
             logger.warning(f"新浪单股行情获取失败 {symbol}: {e}")
             return None
 
+    def _fetch_single_a_stock_from_sina(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """从新浪API单独获取单只A股行情（不依赖全市场快照）"""
+        try:
+            import requests as req_lib
+
+            # 判断交易所：60开头→上海sh，00/30开头→深圳sz
+            if symbol.startswith(('60', '68')):
+                sid = f"sh{symbol}"
+            else:
+                sid = f"sz{symbol}"
+
+            url = f"https://hq.sinajs.cn/list={sid}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://finance.sina.com.cn/',
+            }
+            resp = req_lib.get(url, headers=headers, timeout=10)
+            if resp.status_code != 200 or not resp.text.strip():
+                return None
+
+            import re
+            raw = resp.text
+            match = re.search(r'hq_str_\w+="(.+)"', raw)
+            if not match:
+                return None
+
+            parts = match.group(1).split(',')
+            if len(parts) < 32:
+                return None
+
+            name = parts[0]
+            try:
+                price = float(parts[3])
+                pre_close = float(parts[2])
+                change = round(price - pre_close, 2)
+                change_pct = round(change / pre_close * 100, 2) if pre_close else 0
+                high = float(parts[4])
+                low = float(parts[5])
+                open_price = float(parts[1])
+                volume = int(float(parts[8]))
+                amount = float(parts[9])
+            except (ValueError, IndexError):
+                return None
+
+            if price <= 0:
+                return None
+
+            logger.info(f"A股单股行情获取成功 via 新浪: {symbol} {name} ¥{price}")
+            return {
+                "symbol": symbol,
+                "name": name,
+                "price": price,
+                "change": change,
+                "change_pct": change_pct,
+                "volume": volume,
+                "amount": amount,
+                "high": high,
+                "low": low,
+                "open": open_price,
+                "pre_close": pre_close,
+            }
+        except Exception as e:
+            logger.warning(f"新浪A股单股行情获取失败 {symbol}: {e}")
+            return None
+
     def get_stock_quote(self, symbol: str, market: str = "A") -> Dict[str, Any]:
         """获取单只股票实时行情"""
         df = self.get_spot_quote(market)
@@ -556,6 +621,10 @@ class DefaultAKShareProvider(BaseDataProvider):
                 row = pd.DataFrame()
 
             if row.empty:
+                # 行情缓存中未找到，尝试单独从新浪拉取该股票
+                single = self._fetch_single_a_stock_from_sina(symbol)
+                if single:
+                    return single
                 return self._mock_quote(symbol)
 
             r = row.iloc[0]
