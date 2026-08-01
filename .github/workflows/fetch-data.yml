@@ -16,6 +16,8 @@ jobs:
   fetch-data:
     name: 采集数据
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: 检出代码
