@@ -5,9 +5,11 @@ import BacktestPage from './pages/Backtest/BacktestPage';
 import StockAnalysisPage from './pages/StockAnalysis/StockAnalysisPage';
 import NewsPage from './pages/News/NewsPage';
 
+const basename = import.meta.env.VITE_BASE_PATH || '';
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<DashboardPage />} />
