@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-08-01T10:09:41.704196",
+  "date": "2026-08-01",
+  "files": [
+    {
+      "path": "data/news/daily_events.json",
+      "size": 44492,
+      "modified": "2026-08-01T10:09:41.522432"
+    },
+    {
+      "path": "data/news/insights.json",
+      "size": 177150,
+      "modified": "2026-08-01T10:09:41.525310"
+    }
+  ]
+}
