@@ -3,12 +3,12 @@
  * 本地开发时使用 Vite 代理 (/api → localhost:8000)
  * 回测和个股分析等需要本地后端的接口强制使用 /api
  */
-function getBaseUrl(useLocal = false): string {
+function getBaseUrl(): string {
   return '/api';
 }
 
-async function request<T>(url: string, options?: RequestInit, useLocal = false): Promise<T> {
-  const baseUrl = getBaseUrl(useLocal);
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const baseUrl = getBaseUrl();
   const res = await fetch(`${baseUrl}${url}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -22,7 +22,7 @@ async function request<T>(url: string, options?: RequestInit, useLocal = false):
 
 // ========== 回测 API（强制使用本地后端）==========
 export const backtestApi = {
-  getStrategies: () => request<{ strategies: { name: string; file: string; preview: string; engine: string; size: number }[] }>('/backtest/strategies', undefined, true),
+  getStrategies: () => request<{ strategies: { name: string; file: string; preview: string; engine: string; size: number }[] }>('/backtest/strategies'),
   run: (params: {
     strategy_name: string;
     symbol: string;
@@ -32,7 +32,7 @@ export const backtestApi = {
     initial_capital: number;
     commission: number;
     params?: Record<string, unknown>;
-  }) => request('/backtest/run', { method: 'POST', body: JSON.stringify(params) }, true),
+  }) => request('/backtest/run', { method: 'POST', body: JSON.stringify(params) }),
   runMulti: (params: {
     strategy_name: string;
     symbols: string[];
@@ -42,7 +42,7 @@ export const backtestApi = {
     initial_capital: number;
     commission: number;
     params?: Record<string, unknown>;
-  }) => request('/backtest/run-multi', { method: 'POST', body: JSON.stringify(params) }, true),
+  }) => request('/backtest/run-multi', { method: 'POST', body: JSON.stringify(params) }),
   runCode: (params: {
     code: string;
     symbol: string;
@@ -51,7 +51,7 @@ export const backtestApi = {
     end_date: string;
     initial_capital: number;
     commission: number;
-  }) => request('/backtest/run-code', { method: 'POST', body: JSON.stringify(params) }, true),
+  }) => request('/backtest/run-code', { method: 'POST', body: JSON.stringify(params) }),
   runMultiCode: (params: {
     code: string;
     symbols: string[];
@@ -60,24 +60,25 @@ export const backtestApi = {
     end_date: string;
     initial_capital: number;
     commission: number;
-  }) => request('/backtest/run-multi-code', { method: 'POST', body: JSON.stringify(params) }, true),
+  }) => request('/backtest/run-multi-code', { method: 'POST', body: JSON.stringify(params) }),
   saveCode: (params: { name: string; code: string; overwrite?: boolean }) =>
-    request('/backtest/strategies/save', { method: 'POST', body: JSON.stringify(params) }, true),
-  getCode: (name: string) => request<{ name: string; code: string }>(`/backtest/strategies/${name}/code`, undefined, true),
-  getAiPrompt: (params: { description: string; symbol?: string; market?: string }) =>
+    request('/backtest/strategies/save', { method: 'POST', body: JSON.stringify(params) }),
+  getCode: (name: string) => request<{ name: string; code: string }>(`/backtest/strategies/${name}/code`),
+  getAiPrompt: (params: {
+    description: string; symbol?: string; market?: string }) =>
     request<{ prompt: string; description: string; market: string; symbol: string }>(
-      '/backtest/ai-prompt', { method: 'POST', body: JSON.stringify(params) }, true
+      '/backtest/ai-prompt', { method: 'POST', body: JSON.stringify(params) }
     ),
   uploadStrategy: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return fetch(`${getBaseUrl(true)}/backtest/strategies/upload`, {
+    return fetch(`${getBaseUrl()}/backtest/strategies/upload`, {
       method: 'POST',
       body: formData,
     }).then(r => r.json());
   },
   deleteStrategy: (name: string) =>
-    request(`/backtest/strategies/${name}`, { method: 'DELETE' }, true),
+    request(`/backtest/strategies/${name}`, { method: 'DELETE' }),
 };
 
 // ========== 市场数据 API ==========
@@ -127,16 +128,16 @@ export const newsApi = {
 
 // ========== 个股分析 API（强制使用本地后端）==========
 export const stockApi = {
-  search: (keyword: string, market?: string) => request(`/stock/search?keyword=${encodeURIComponent(keyword)}&market=${market || 'A'}`, undefined, true),
+  search: (keyword: string, market?: string) => request(`/stock/search?keyword=${encodeURIComponent(keyword)}&market=${market || 'A'}`),
   getQuote: (symbol: string, market?: string) =>
-    request(`/stock/quote?symbol=${symbol}&market=${market || 'A'}`, undefined, true),
+    request(`/stock/quote?symbol=${symbol}&market=${market || 'A'}`),
   analyze: (params: {
     symbol: string;
     market: string;
     analysis_types: string[];
-  }) => request('/stock/analyze', { method: 'POST', body: JSON.stringify(params) }, true),
+  }) => request('/stock/analyze', { method: 'POST', body: JSON.stringify(params) }),
   getKline: (symbol: string, market?: string, period?: string, count?: number) =>
-    request(`/stock/kline?symbol=${symbol}&market=${market || 'A'}&period=${period || 'daily'}&count=${count || 250}`, undefined, true),
+    request(`/stock/kline?symbol=${symbol}&market=${market || 'A'}&period=${period || 'daily'}&count=${count || 250}`),
   // 深度研报
   getResearchReport: (params: {
     symbol: string;
@@ -156,7 +157,7 @@ export const stockApi = {
     report_time: string;
     ai_generated?: boolean;
     sections: Record<string, unknown>;
-  }>('/stock/research-report', { method: 'POST', body: JSON.stringify(params) }, true),
+  }>('/stock/research-report', { method: 'POST', body: JSON.stringify(params) }),
   // LLM Provider信息
   getLLMProviders: () => request<{
     providers: Array<{
@@ -169,7 +170,7 @@ export const stockApi = {
     }>;
     server_has_default: boolean;
     server_default_provider: string | null;
-  }>('/stock/llm-providers', undefined, true),
+  }>('/stock/llm-providers'),
 };
 
 // ========== 系统 ==========

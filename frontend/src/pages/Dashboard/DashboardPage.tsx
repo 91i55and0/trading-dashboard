@@ -386,6 +386,7 @@ function rawCBOEToAnalysis(raw: import('../../api/staticData').CBOEData): PutCal
         },
       ],
       equity_vs_index: `Equity ${equityRatio.toFixed(3)} vs Index ${indexRatio.toFixed(3)}`,
+      generated_at: raw.fetched_at,
     },
     data: [{
       date: raw.report_date,
