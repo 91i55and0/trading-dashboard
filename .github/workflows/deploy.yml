@@ -67,6 +67,9 @@ jobs:
           cd frontend
           npm run build
 
+      - name: 生成 404.html（SPA 路由兼容）
+        run: cp frontend/dist/index.html frontend/dist/404.html
+
       - name: 上传构建产物
         uses: actions/upload-pages-artifact@v3
         with:
