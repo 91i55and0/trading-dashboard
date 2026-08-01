@@ -42,26 +42,7 @@ jobs:
           python scripts/fetch_news.py || echo "新闻数据采集失败"
 
       - name: 生成数据清单
-        run: |
-          python -c "
-import json, datetime
-from pathlib import Path
-data_dir = Path('data')
-manifest = {
-    'generated_at': datetime.datetime.now().isoformat(),
-    'date': datetime.datetime.now().strftime('%Y-%m-%d'),
-    'files': [],
-}
-for f in sorted(data_dir.rglob('*.json')):
-    manifest['files'].append({
-        'path': str(f.as_posix()),
-        'size': f.stat().st_size,
-        'modified': datetime.datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
-    })
-with open(data_dir / 'manifest.json', 'w') as f:
-    json.dump(manifest, f, indent=2)
-print(f'数据清单已生成: {len(manifest[\"files\"])} 个文件')
-"
+        run: python scripts/generate_manifest.py
 
       - name: 提交数据到仓库
         run: |
