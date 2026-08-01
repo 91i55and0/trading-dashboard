@@ -1,0 +1,87 @@
+# 构建并部署到 GitHub Pages
+# 在有新的数据提交时自动构建前端并部署
+# 也可以手动触发
+
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'data/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:  # 支持手动触发
+
+# 设置 GitHub Pages 权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只允许一个并发部署
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建前端
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        run: |
+          cd frontend
+          npm ci
+
+      - name: 复制数据文件到 public 目录
+        run: |
+          # 确保 public/data 目录存在
+          mkdir -p frontend/public/data
+          # 复制所有数据文件
+          if [ -d "data" ]; then
+            cp -r data/* frontend/public/data/
+            echo "数据文件已复制:"
+            find frontend/public/data -type f -name "*.json" | head -20
+          else
+            echo "警告: data 目录不存在"
+          fi
+
+      - name: 构建前端
+        env:
+          VITE_STATIC_MODE: 'true'
+          VITE_BASE_PATH: '/${{ github.event.repository.name }}'
+        run: |
+          cd frontend
+          npm run build
+
+      - name: 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

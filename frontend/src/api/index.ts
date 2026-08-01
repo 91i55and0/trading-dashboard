@@ -1,7 +1,15 @@
-const BASE_URL = '/api';
+/**
+ * API 基础 URL
+ * 本地开发时使用 Vite 代理 (/api → localhost:8000)
+ * 回测和个股分析等需要本地后端的接口强制使用 /api
+ */
+function getBaseUrl(useLocal = false): string {
+  return '/api';
+}
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${url}`, {
+async function request<T>(url: string, options?: RequestInit, useLocal = false): Promise<T> {
+  const baseUrl = getBaseUrl(useLocal);
+  const res = await fetch(`${baseUrl}${url}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -12,9 +20,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// ========== 回测 API ==========
+// ========== 回测 API（强制使用本地后端）==========
 export const backtestApi = {
-  getStrategies: () => request<{ strategies: { name: string; file: string; preview: string; engine: string; size: number }[] }>('/backtest/strategies'),
+  getStrategies: () => request<{ strategies: { name: string; file: string; preview: string; engine: string; size: number }[] }>('/backtest/strategies', undefined, true),
   run: (params: {
     strategy_name: string;
     symbol: string;
@@ -24,8 +32,7 @@ export const backtestApi = {
     initial_capital: number;
     commission: number;
     params?: Record<string, unknown>;
-  }) => request('/backtest/run', { method: 'POST', body: JSON.stringify(params) }),
-  // 多股票组合回测
+  }) => request('/backtest/run', { method: 'POST', body: JSON.stringify(params) }, true),
   runMulti: (params: {
     strategy_name: string;
     symbols: string[];
@@ -35,8 +42,7 @@ export const backtestApi = {
     initial_capital: number;
     commission: number;
     params?: Record<string, unknown>;
-  }) => request('/backtest/run-multi', { method: 'POST', body: JSON.stringify(params) }),
-  // 直接运行代码
+  }) => request('/backtest/run-multi', { method: 'POST', body: JSON.stringify(params) }, true),
   runCode: (params: {
     code: string;
     symbol: string;
@@ -45,8 +51,7 @@ export const backtestApi = {
     end_date: string;
     initial_capital: number;
     commission: number;
-  }) => request('/backtest/run-code', { method: 'POST', body: JSON.stringify(params) }),
-  // 多股票代码直接运行
+  }) => request('/backtest/run-code', { method: 'POST', body: JSON.stringify(params) }, true),
   runMultiCode: (params: {
     code: string;
     symbols: string[];
@@ -55,27 +60,24 @@ export const backtestApi = {
     end_date: string;
     initial_capital: number;
     commission: number;
-  }) => request('/backtest/run-multi-code', { method: 'POST', body: JSON.stringify(params) }),
-  // 保存策略代码
+  }) => request('/backtest/run-multi-code', { method: 'POST', body: JSON.stringify(params) }, true),
   saveCode: (params: { name: string; code: string; overwrite?: boolean }) =>
-    request('/backtest/strategies/save', { method: 'POST', body: JSON.stringify(params) }),
-  // 获取策略源码
-  getCode: (name: string) => request<{ name: string; code: string }>(`/backtest/strategies/${name}/code`),
-  // 生成 AI 提示词
+    request('/backtest/strategies/save', { method: 'POST', body: JSON.stringify(params) }, true),
+  getCode: (name: string) => request<{ name: string; code: string }>(`/backtest/strategies/${name}/code`, undefined, true),
   getAiPrompt: (params: { description: string; symbol?: string; market?: string }) =>
     request<{ prompt: string; description: string; market: string; symbol: string }>(
-      '/backtest/ai-prompt', { method: 'POST', body: JSON.stringify(params) }
+      '/backtest/ai-prompt', { method: 'POST', body: JSON.stringify(params) }, true
     ),
   uploadStrategy: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return fetch(`${BASE_URL}/backtest/strategies/upload`, {
+    return fetch(`${getBaseUrl(true)}/backtest/strategies/upload`, {
       method: 'POST',
       body: formData,
     }).then(r => r.json());
   },
   deleteStrategy: (name: string) =>
-    request(`/backtest/strategies/${name}`, { method: 'DELETE' }),
+    request(`/backtest/strategies/${name}`, { method: 'DELETE' }, true),
 };
 
 // ========== 市场数据 API ==========
@@ -123,18 +125,18 @@ export const newsApi = {
   getDigest: () => request('/news/digest'),
 };
 
-// ========== 个股分析 API ==========
+// ========== 个股分析 API（强制使用本地后端）==========
 export const stockApi = {
-  search: (keyword: string, market?: string) => request(`/stock/search?keyword=${encodeURIComponent(keyword)}&market=${market || 'A'}`),
+  search: (keyword: string, market?: string) => request(`/stock/search?keyword=${encodeURIComponent(keyword)}&market=${market || 'A'}`, undefined, true),
   getQuote: (symbol: string, market?: string) =>
-    request(`/stock/quote?symbol=${symbol}&market=${market || 'A'}`),
+    request(`/stock/quote?symbol=${symbol}&market=${market || 'A'}`, undefined, true),
   analyze: (params: {
     symbol: string;
     market: string;
     analysis_types: string[];
-  }) => request('/stock/analyze', { method: 'POST', body: JSON.stringify(params) }),
+  }) => request('/stock/analyze', { method: 'POST', body: JSON.stringify(params) }, true),
   getKline: (symbol: string, market?: string, period?: string, count?: number) =>
-    request(`/stock/kline?symbol=${symbol}&market=${market || 'A'}&period=${period || 'daily'}&count=${count || 250}`),
+    request(`/stock/kline?symbol=${symbol}&market=${market || 'A'}&period=${period || 'daily'}&count=${count || 250}`, undefined, true),
   // 深度研报
   getResearchReport: (params: {
     symbol: string;
@@ -154,7 +156,7 @@ export const stockApi = {
     report_time: string;
     ai_generated?: boolean;
     sections: Record<string, unknown>;
-  }>('/stock/research-report', { method: 'POST', body: JSON.stringify(params) }),
+  }>('/stock/research-report', { method: 'POST', body: JSON.stringify(params) }, true),
   // LLM Provider信息
   getLLMProviders: () => request<{
     providers: Array<{
@@ -167,5 +169,10 @@ export const stockApi = {
     }>;
     server_has_default: boolean;
     server_default_provider: string | null;
-  }>('/stock/llm-providers'),
+  }>('/stock/llm-providers', undefined, true),
+};
+
+// ========== 系统 ==========
+export const systemApi = {
+  healthCheck: () => request<{ status: string; service: string }>('/health'),
 };

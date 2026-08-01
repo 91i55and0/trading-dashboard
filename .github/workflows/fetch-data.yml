@@ -1,0 +1,72 @@
+# 每日定时数据采集工作流
+# 每天北京时间 8:00 和 18:00 运行数据采集脚本
+# 将生成的 JSON 数据提交到仓库的 data/ 目录
+
+name: 每日数据采集
+
+on:
+  schedule:
+    # 北京时间 8:00 (UTC 0:00) - 开盘前
+    - cron: '0 0 * * 1-5'
+    # 北京时间 18:00 (UTC 10:00) - 收盘后
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  fetch-data:
+    name: 采集数据
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装 Python 依赖
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: 采集 CBOE 数据
+        run: |
+          python scripts/fetch_cboe.py || echo "CBOE 数据采集失败（非美股交易时段正常）"
+
+      - name: 采集新闻数据
+        run: |
+          python scripts/fetch_news.py || echo "新闻数据采集失败"
+
+      - name: 生成数据清单
+        run: |
+          python -c "
+import json, datetime
+from pathlib import Path
+data_dir = Path('data')
+manifest = {
+    'generated_at': datetime.datetime.now().isoformat(),
+    'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+    'files': [],
+}
+for f in sorted(data_dir.rglob('*.json')):
+    manifest['files'].append({
+        'path': str(f.as_posix()),
+        'size': f.stat().st_size,
+        'modified': datetime.datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+    })
+with open(data_dir / 'manifest.json', 'w') as f:
+    json.dump(manifest, f, indent=2)
+print(f'数据清单已生成: {len(manifest[\"files\"])} 个文件')
+"
+
+      - name: 提交数据到仓库
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "chore(data): 每日数据采集 $(date '+%Y-%m-%d %H:%M')"
+          git push

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { newsApi } from '../../api';
+import { staticDataApi } from '../../api/staticData';
 import {
   Newspaper,
   Zap,
@@ -22,6 +23,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Info,
 } from 'lucide-react';
 
 interface MarketEvent {
@@ -114,6 +116,31 @@ export default function NewsPage() {
   const fetchData = async () => {
     setLoading(true);
     setError('');
+
+    // 判断是否处于静态部署模式（GitHub Pages）
+    const isStatic = staticDataApi.isStaticMode();
+
+    if (isStatic) {
+      // 静态模式：直接从静态数据加载
+      console.log('静态部署模式，加载新闻静态数据...');
+      const [eventsData, insightsData] = await Promise.all([
+        staticDataApi.getDailyEvents(),
+        staticDataApi.getInsights(),
+      ]);
+      if (eventsData) {
+        setEvents(eventsData as unknown as DailyEventsData);
+      }
+      if (insightsData) {
+        setInsights(insightsData.insights || []);
+      }
+      if (!eventsData && !insightsData) {
+        setError('静态数据加载失败，请等待数据采集完成');
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 非静态模式：尝试实时 API
     try {
       const [eventsRes, insightsRes, monitorRes] = await Promise.all([
         newsApi.getDailyEvents() as Promise<DailyEventsData>,
@@ -134,7 +161,8 @@ export default function NewsPage() {
     fetchData();
   }, []);
 
-  const formatMoney = (n: number) => {
+  const formatMoney = (n: number | null | undefined) => {
+    if (n == null || isNaN(n)) return '-';
     if (Math.abs(n) >= 1e12) return (n / 1e12).toFixed(2) + 'T';
     if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + 'B';
     if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -197,6 +225,20 @@ export default function NewsPage() {
           刷新
         </button>
       </div>
+
+      {/* 静态模式提示 */}
+      {staticDataApi.isStaticMode() && (
+        <div style={{
+          background: 'rgba(33,150,243,0.08)', border: '1px solid rgba(33,150,243,0.2)',
+          borderRadius: 6, padding: '12px 16px', marginBottom: 16,
+          color: 'var(--accent-blue)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <Info size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            当前为 GitHub Pages 静态模式，展示每日定时采集的新闻数据。13F 持仓监控数据需本地启动后端服务查看。
+          </span>
+        </div>
+      )}
 
       {error && (
         <div style={{ background: 'rgba(239,83,80,0.1)', border: '1px solid rgba(239,83,80,0.3)', borderRadius: 6, padding: '12px 16px', marginBottom: 16, color: 'var(--accent-red)', fontSize: 13 }}>

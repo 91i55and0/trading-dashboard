@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { marketApi } from '../../api';
+import { marketApi, systemApi } from '../../api';
+import { staticDataApi } from '../../api/staticData';
 import {
   Activity,
   AlertTriangle,
@@ -339,6 +340,64 @@ const formatNum = (n: number) => {
   return n.toLocaleString();
 };
 
+/** 将原始 CBOE JSON 数据转换为 PutCallAnalysis 格式 */
+function rawCBOEToAnalysis(raw: import('../../api/staticData').CBOEData): PutCallAnalysis {
+  const ratio = raw.total_put_call_ratio;
+  const equityRatio = raw.equity_put_call_ratio ?? ratio;
+  const indexRatio = raw.index_put_call_ratio ?? ratio;
+
+  let sentiment = '中性';
+  let signal = '市场情绪中性，无明显方向性信号';
+  let riskLevel = 'medium';
+  let trend = '震荡';
+
+  if (ratio > 1.0) { sentiment = '恐慌'; riskLevel = 'high'; signal = 'Put/Call 比率 > 1.0，市场恐慌情绪显著'; }
+  else if (ratio > 0.85) { sentiment = '偏空'; riskLevel = 'medium'; signal = 'Put/Call 比率偏高，市场情绪偏谨慎'; }
+  else if (ratio > 0.7) { sentiment = '中性'; riskLevel = 'medium'; signal = 'Put/Call 比率在正常范围内'; }
+  else if (ratio > 0.55) { sentiment = '正常'; riskLevel = 'low'; signal = 'Put/Call 比率偏低，市场情绪偏乐观'; }
+  else { sentiment = '乐观'; riskLevel = 'low'; signal = 'Put/Call 比率显著偏低，市场情绪乐观'; }
+
+  return {
+    current_ratio: ratio,
+    current_equity_ratio: equityRatio,
+    current_index_ratio: indexRatio,
+    avg_5d: ratio,
+    avg_10d: ratio,
+    avg_20d: ratio,
+    avg_30d: ratio,
+    volatility_20d: 0.05,
+    percentile: 50,
+    sentiment,
+    signal,
+    risk_level: riskLevel,
+    trend,
+    trend_strength: '弱',
+    trend_detail: `当前 Total P/C = ${ratio.toFixed(3)}，Equity P/C = ${equityRatio.toFixed(3)}，Index P/C = ${indexRatio.toFixed(3)}`,
+    extremes: [],
+    report: {
+      sections: [
+        {
+          title: '静态数据模式',
+          content: '当前处于 GitHub Pages 静态部署模式，数据为定时采集的 CBOE Put/Call 比率快照，非实时数据。如需实时数据，请本地启动后端服务。',
+        },
+        {
+          title: '当前数据',
+          content: `Total P/C: ${ratio.toFixed(3)} | Equity P/C: ${equityRatio.toFixed(3)} | Index P/C: ${indexRatio.toFixed(3)} | 数据来源: ${raw.source} | 采集时间: ${raw.report_date}`,
+        },
+      ],
+      equity_vs_index: `Equity ${equityRatio.toFixed(3)} vs Index ${indexRatio.toFixed(3)}`,
+    },
+    data: [{
+      date: raw.report_date,
+      equity_put_call_ratio: equityRatio,
+      index_put_call_ratio: indexRatio,
+      total_put_call_ratio: ratio,
+    }],
+    source: raw.source + ' (静态)',
+    analysis_time: raw.fetched_at,
+  };
+}
+
 const zColor = (z: number) => {
   if (z >= 2.0) return 'var(--accent-red)';
   if (z >= 1.0) return 'var(--accent-yellow)';
@@ -429,6 +488,7 @@ export default function DashboardPage() {
   const [cboeTracking, setCboeTracking] = useState<CBOETrackingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [backendDown, setBackendDown] = useState(false);
   const [activeTab, setActiveTab] = useState<'cftc' | 'putcall' | 'sse' | 'tracking'>('cftc');
   const [trackingSubTab, setTrackingSubTab] = useState<'cftc_track' | 'cboe_track' | 'sse_track'>('cftc_track');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -438,11 +498,42 @@ export default function DashboardPage() {
   const fetchData = async () => {
     setLoading(true);
     setError('');
+    setBackendDown(false);
+
+    // 判断是否处于静态部署模式（GitHub Pages）
+    const isStatic = staticDataApi.isStaticMode();
+
+    if (isStatic) {
+      // 静态模式：直接从静态数据加载 CBOE，其他数据提示需本地后端
+      console.log('静态部署模式，加载 CBOE 静态数据...');
+      const cboeData = await staticDataApi.getCBOELatest();
+      if (cboeData) {
+        const analysis = rawCBOEToAnalysis(cboeData);
+        setPutCallAnalysis(analysis);
+      } else {
+        setError('CBOE 静态数据加载失败，请等待数据采集完成');
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 非静态模式：先检查后端连通性
+    try {
+      await systemApi.healthCheck();
+    } catch {
+      setBackendDown(true);
+      setError('后端服务未启动，请先运行 启动交易看板.bat');
+      setLoading(false);
+      return;
+    }
+
     // CFTC 和 CBOE 分开加载，互不阻塞
     const results = await Promise.allSettled([
       marketApi.getCFTCLatest() as Promise<CFTCReport>,
       marketApi.getPutCallAnalysis() as Promise<PutCallAnalysis>,
     ]);
+
+    let cboeLoaded = false;
     if (results[0].status === 'fulfilled') {
       setCftcReport(results[0].value);
     } else {
@@ -450,11 +541,12 @@ export default function DashboardPage() {
     }
     if (results[1].status === 'fulfilled') {
       setPutCallAnalysis(results[1].value);
+      cboeLoaded = true;
     } else {
       console.warn('CBOE加载失败:', results[1].reason);
     }
     // 两者都失败才报错
-    if (results[0].status === 'rejected' && results[1].status === 'rejected') {
+    if (results[0].status === 'rejected' && !cboeLoaded) {
       setError('CFTC 和 CBOE 数据均加载失败，请检查网络连接');
     }
     setLoading(false);
@@ -577,14 +669,41 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* 静态模式提示 */}
+      {staticDataApi.isStaticMode() && (
+        <div style={{
+          background: 'rgba(33,150,243,0.08)', border: '1px solid rgba(33,150,243,0.2)',
+          borderRadius: 6, padding: '12px 16px', marginBottom: 16,
+          color: 'var(--accent-blue)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <Info size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            当前为 GitHub Pages 静态模式，仅展示 CBOE Put/Call 比率数据（每日定时采集）。
+            CFTC 持仓报告、SSE 期权数据及持续跟踪报告需<a href="https://github.com" target="_blank" style={{ color: 'var(--accent-blue)', textDecoration: 'underline' }}>本地启动后端服务</a>。
+          </span>
+        </div>
+      )}
+
       {error && (
         <div style={{
           background: 'rgba(239,83,80,0.1)', border: '1px solid rgba(239,83,80,0.3)',
           borderRadius: 6, padding: '12px 16px', marginBottom: 16,
-          color: 'var(--accent-red)', fontSize: 13,
+          color: 'var(--accent-red)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 12,
         }}>
-          <AlertTriangle size={14} style={{ display: 'inline', marginRight: 6 }} />
-          {error}
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{error}</span>
+          {backendDown && (
+            <button
+              onClick={() => fetchData()}
+              style={{
+                background: 'var(--accent-red)', color: '#fff', border: 'none',
+                borderRadius: 4, padding: '4px 12px', fontSize: 12, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              }}
+            >
+              <RefreshCw size={12} /> 重试
+            </button>
+          )}
         </div>
       )}
 
