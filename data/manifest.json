@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-08-17T01:40:25.581162",
+  "generated_at": "2026-08-17T10:19:39.444537",
   "date": "2026-08-17",
   "files": [
     {
       "path": "data/manifest.json",
       "size": 455,
-      "modified": "2026-08-17T01:40:09.338131"
+      "modified": "2026-08-17T10:19:22.269106"
     },
     {
       "path": "data/news/daily_events.json",
-      "size": 46416,
-      "modified": "2026-08-17T01:40:25.443416"
+      "size": 44418,
+      "modified": "2026-08-17T10:19:39.251445"
     },
     {
       "path": "data/news/insights.json",
-      "size": 175554,
-      "modified": "2026-08-17T01:40:25.446204"
+      "size": 172679,
+      "modified": "2026-08-17T10:19:39.254233"
     }
   ]
 }
